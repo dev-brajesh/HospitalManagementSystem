@@ -2,8 +2,11 @@
 
 <%
     String userRole = (String) session.getAttribute("role");
-    if (userRole == null) userRole = request.getParameter("role");
-    if (userRole == null) userRole = "";
+
+    if (userRole == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
 %>
 
 <!DOCTYPE html>

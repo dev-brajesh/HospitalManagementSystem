@@ -40,35 +40,35 @@
 
                     <button type="button"
                             id="doctorBtn"
-                            data-role="Doctor"
+                            data-role="DOCTOR"
                             class="role-btn flex-1 py-2 rounded-lg bg-emerald-500 text-white font-semibold transition">
                         Doctor
                     </button>
 
                     <button type="button"
                             id="patientBtn"
-                            data-role="Patient"
+                            data-role="PATIENT"
                             class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
                         Patient
                     </button>
 
                     <button type="button"
                             id="labBtn"
-                            data-role="Lab"
+                            data-role="LAB"
                             class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
                         Lab
                     </button>
 
                     <button type="button"
                             id="receptionBtn"
-                            data-role="Reception"
+                            data-role="RECEPTIONIST"
                             class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
                         Reception
                     </button>
 
                     <button type="button"
                             id="pharmacistBtn"
-                            data-role="Pharmacy"
+                            data-role="PHARMACY"
                             class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
                         Pharmacy
                     </button>
@@ -87,7 +87,7 @@
                       class="space-y-5">
 
                     <input type="hidden" name="action" value="login">
-                    <input type="hidden" name="role" id="role" value="Doctor">
+                    <input type="hidden" name="role" id="role" value="DOCTOR">
 
                     <!-- Username -->
                     <div>
@@ -203,36 +203,6 @@
     </div>
 
 </div>
-
-<script>
-    const roleInput = document.getElementById("role");
-    const roleButtons = document.querySelectorAll(".role-btn");
-
-    roleButtons.forEach(button => {
-        button.addEventListener("click", function () {
-            roleButtons.forEach(btn => {
-                btn.classList.remove("bg-emerald-500", "text-white", "font-semibold");
-                btn.classList.add("text-slate-600");
-            });
-
-            this.classList.remove("text-slate-600");
-            this.classList.add("bg-emerald-500", "text-white", "font-semibold");
-            roleInput.value = this.dataset.role;
-        });
-    });
-
-    function showPassword() {
-        const password = document.getElementById("password");
-        const slash = document.getElementById("slash");
-
-        if (password.type === "password") {
-            password.type = "text";
-            slash.style.display = "none";
-        } else {
-            password.type = "password";
-            slash.style.display = "block";
-        }
-    }
-</script>
+<script src="../js/login.js"></script>
 </body>
 </html>
