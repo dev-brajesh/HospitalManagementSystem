@@ -197,7 +197,7 @@
 
         <p class="text-center text-sm text-slate-500 mt-4">
             New patient?
-            <a href="register.jsp" class="text-emerald-600 font-semibold hover:underline">Register here</a>
+            <a href="patientRegistration.jsp" class="text-emerald-600 font-semibold hover:underline">Register here</a>
         </p>
 
     </div>
