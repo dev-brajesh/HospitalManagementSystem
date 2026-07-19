@@ -1,4 +1,3 @@
-
 package com.hospital.servlet;
 
 import com.hospital.dao.VisitDAO;
@@ -6,6 +5,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,12 +31,14 @@ public class LabResultServlet extends HttpServlet {
         try {
             int visitId = Integer.parseInt(request.getParameter("visitId"));
             String resultText = request.getParameter("labResultText");
+            String feeParam = request.getParameter("labFee");
+            BigDecimal labFee = (feeParam == null || feeParam.isBlank()) ? BigDecimal.ZERO : new BigDecimal(feeParam);
 
-            // completeLabTest now only takes (visitId, resultText) — it always
-            // routes the visit to LAB_PAYMENT and leaves paying it to the patient.
-            visitDAO.completeLabTest(visitId, resultText);
+            // Lab sets the actual fee once the test is complete, then routes to LAB_PAYMENT.
+            // Paying that fee sends the patient back to the doctor for review + prescription.
+            visitDAO.completeLabTest(visitId, resultText, labFee);
         } catch (NumberFormatException e) {
-            LOGGER.log(Level.WARNING, "Invalid visitId submitted to /labResult", e);
+            LOGGER.log(Level.WARNING, "Invalid visitId or labFee submitted to /labResult", e);
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Failed to complete lab test", e);
         }

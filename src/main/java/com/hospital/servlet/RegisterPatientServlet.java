@@ -35,8 +35,12 @@ public class RegisterPatientServlet extends HttpServlet {
         patient.setUsername(request.getParameter("username"));
         patient.setPassword(request.getParameter("password"));
 
+        System.out.println("[RegisterPatientServlet] Raw submitted username='" + patient.getUsername()
+                + "' email='" + patient.getEmail() + "'");
+
         String validationError = validate(patient);
         if (validationError != null) {
+            System.out.println("[RegisterPatientServlet] Validation failed: " + validationError);
             request.setAttribute("errorMessage", validationError);
             request.getRequestDispatcher("/Pages/patientRegistration.jsp").forward(request, response);
             return;
@@ -44,6 +48,7 @@ public class RegisterPatientServlet extends HttpServlet {
 
         try {
             if (patientDAO.usernameOrEmailExists(patient.getUsername(), patient.getEmail())) {
+                System.out.println("[RegisterPatientServlet] Duplicate check returned TRUE — blocking registration");
                 request.setAttribute("errorMessage",
                         "That username or email is already registered. Please choose another.");
                 request.getRequestDispatcher("/Pages/patientRegistration.jsp").forward(request, response);
@@ -51,6 +56,7 @@ public class RegisterPatientServlet extends HttpServlet {
             }
 
             boolean inserted = patientDAO.insertPatient(patient);
+            System.out.println("[RegisterPatientServlet] insertPatient returned: " + inserted);
 
             if (inserted) {
                 response.sendRedirect(request.getContextPath() + "/Pages/login.jsp?role=patient&registered=true");

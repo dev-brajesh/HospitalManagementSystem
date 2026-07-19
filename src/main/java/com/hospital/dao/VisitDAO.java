@@ -17,34 +17,39 @@ public class VisitDAO {
 
     public int createVisit(int patientId, String patientName, String contactNumber, String symptoms) throws SQLException {
         String insertSql = "INSERT INTO visits " +
-                "(patient_id, patient_name, contact_number, symptoms, language, status, visit_date, " +
+                "(visit_number, patient_id, patient_name, contact_number, symptoms, language, status, visit_date, " +
                 "consultation_fee, consultation_paid, lab_fee, lab_paid, medicine_paid, medicine_dispensed) " +
-                "VALUES (?, ?, ?, ?, 'en', 'REGISTRATION', CURDATE(), ?, 0, 0, 0, 0, 0)";
+                "VALUES ('PENDING', ?, ?, ?, ?, 'en', 'REGISTRATION', CURDATE(), ?, 0, 0, 0, 0, 0)";
 
         System.out.println("[VisitDAO] createVisit: patientId=" + patientId + ", patientName=" + patientName + ", contactNumber=" + contactNumber + ", symptoms='" + symptoms + "'");
 
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getConnection();
+            try (PreparedStatement stmt = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
 
-            stmt.setInt(1, patientId);
-            stmt.setString(2, patientName);
-            stmt.setString(3, contactNumber);
-            stmt.setString(4, symptoms);
-            stmt.setBigDecimal(5, DEFAULT_CONSULTATION_FEE);
+                stmt.setInt(1, patientId);
+                stmt.setString(2, patientName);
+                stmt.setString(3, contactNumber);
+                stmt.setString(4, symptoms);
+                stmt.setBigDecimal(5, DEFAULT_CONSULTATION_FEE);
 
-            System.out.println("[VisitDAO] Executing insert: " + insertSql);
-            int rows = stmt.executeUpdate();
-            System.out.println("[VisitDAO] Rows inserted: " + rows);
-            if (rows == 0) return -1;
+                System.out.println("[VisitDAO] Executing insert: " + insertSql);
+                int rows = stmt.executeUpdate();
+                System.out.println("[VisitDAO] Rows inserted: " + rows);
+                if (rows == 0) return -1;
 
-            try (ResultSet keys = stmt.getGeneratedKeys()) {
-                if (!keys.next()) return -1;
-                int newId = keys.getInt(1);
-                System.out.println("[VisitDAO] New visit id: " + newId);
-                setVisitNumber(conn, newId);
-                stageLogDAO.logTransition(newId, null, "REGISTRATION");
-                return newId;
+                try (ResultSet keys = stmt.getGeneratedKeys()) {
+                    if (!keys.next()) return -1;
+                    int newId = keys.getInt(1);
+                    System.out.println("[VisitDAO] New visit id: " + newId);
+                    setVisitNumber(conn, newId);
+                    stageLogDAO.logTransition(newId, null, "REGISTRATION");
+                    return newId;
+                }
             }
+        } finally {
+            if (conn != null) conn.close();
         }
     }
 
@@ -158,7 +163,7 @@ public class VisitDAO {
      * Does NOT advance the visit status — reception assigns the doctor while the visit remains in REGISTRATION.
      * The patient will be shown the consultation fee and asked to pay; payment flips the visit to DOCTOR.
      */
-    public boolean assignDoctor(int visitId, int doctorId, String department, java.math.BigDecimal consultationFee) throws SQLException {
+    public boolean assignDoctor(int visitId, int doctorId, String department, BigDecimal consultationFee) throws SQLException {
         String sql = "UPDATE visits SET assigned_doctor_id = ?, department = ?, consultation_fee = ? " +
                 "WHERE id = ? AND status = 'REGISTRATION' AND assigned_doctor_id IS NULL";
         try (Connection conn = DBConnection.getConnection();
@@ -168,41 +173,59 @@ public class VisitDAO {
             stmt.setBigDecimal(3, consultationFee);
             stmt.setInt(4, visitId);
             boolean ok = stmt.executeUpdate() > 0;
-            // No status transition here; stage log is reserved for actual stage changes.
             return ok;
         }
     }
 
-    /** Doctor: writes diagnosis and branches. No fee gate on this edge (matches the diagram). */
-    public boolean completeConsultation(int visitId, String diagnosis, String labTestName, BigDecimal labFee, String nextStatus) throws SQLException {
-        String sql = "UPDATE visits SET diagnosis = ?, lab_test_name = ?, lab_fee = ?, status = ? WHERE id = ?";
+    /** Doctor's FIRST consult: writes diagnosis and branches to LAB or PHARMACY.
+     * labTestName is null when going straight to pharmacy (no lab needed).
+     */
+    public boolean completeConsultation(int visitId, String diagnosis, String labTestName, String nextStatus) throws SQLException {
+        String sql = "UPDATE visits SET diagnosis = ?, lab_test_name = ?, status = ? WHERE id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, diagnosis);
             stmt.setString(2, labTestName);
-            stmt.setBigDecimal(3, labFee);
-            stmt.setString(4, nextStatus);
-            stmt.setInt(5, visitId);
+            stmt.setString(3, nextStatus);
+            stmt.setInt(4, visitId);
             boolean ok = stmt.executeUpdate() > 0;
             if (ok) stageLogDAO.logTransition(visitId, "DOCTOR", nextStatus);
             return ok;
         }
     }
 
-    /** Lab: records result + moves to LAB_PAYMENT (out of the lab queue, waiting on the patient to pay). */
-    public boolean completeLabTest(int visitId, String labResultText) throws SQLException {
-        String sql = "UPDATE visits SET lab_result_text = ?, lab_paid = 0, status = 'LAB_PAYMENT' WHERE id = ?";
+    /** Doctor's SECOND consult (after lab results are in and paid for): moves DOCTOR -> PHARMACY.
+     * Diagnosis / lab fields are untouched here — they were already set on the first consult.
+     * Prescriptions themselves are saved separately via PrescriptionDAO by the servlet.
+     */
+    public boolean sendToPharmacyAfterLab(int visitId) throws SQLException {
+        String sql = "UPDATE visits SET status = 'PHARMACY' WHERE id = ? AND status = 'DOCTOR'";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, visitId);
+            boolean ok = stmt.executeUpdate() > 0;
+            if (ok) stageLogDAO.logTransition(visitId, "DOCTOR", "PHARMACY");
+            return ok;
+        }
+    }
+
+    /** Lab: records result + the fee they determined after doing the test, moves to LAB_PAYMENT. */
+    public boolean completeLabTest(int visitId, String labResultText, BigDecimal labFee) throws SQLException {
+        String sql = "UPDATE visits SET lab_result_text = ?, lab_fee = ?, lab_paid = 0, status = 'LAB_PAYMENT' WHERE id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, labResultText);
-            stmt.setInt(2, visitId);
+            stmt.setBigDecimal(2, labFee);
+            stmt.setInt(3, visitId);
             boolean ok = stmt.executeUpdate() > 0;
             if (ok) stageLogDAO.logTransition(visitId, "LAB", "LAB_PAYMENT");
             return ok;
         }
     }
 
-    /** Pharmacy: records cost + dispenses, moves to PHARMACY_PAYMENT (waiting on the patient to pay before DONE). */
+    /** Pharmacy: records the total cost and marks dispensed, moves to PHARMACY_PAYMENT.
+     * Medicines themselves were already prescribed by the doctor — pharmacy is just filling the order.
+     */
     public boolean dispenseMedicine(int visitId, BigDecimal totalCost) throws SQLException {
         String sql = "UPDATE visits SET pharmacy_total_cost = ?, medicine_paid = 0, medicine_dispensed = 1, status = 'PHARMACY_PAYMENT' WHERE id = ?";
         try (Connection conn = DBConnection.getConnection();
@@ -224,7 +247,6 @@ public class VisitDAO {
         try (Connection conn = DBConnection.getConnection()) {
             switch (feeType) {
                 case "consultation": {
-                    // Mark consultation as paid. If a doctor is already assigned, move the visit to DOCTOR.
                     String paySql = "UPDATE visits SET consultation_paid = 1 WHERE id = ? AND status = 'REGISTRATION' AND consultation_paid = 0";
                     try (PreparedStatement payStmt = conn.prepareStatement(paySql)) {
                         payStmt.setInt(1, visitId);
@@ -232,7 +254,6 @@ public class VisitDAO {
                         if (updated == 0) return false;
                     }
 
-                    // If a doctor was assigned, promote to DOCTOR stage so it appears in doctor's queue.
                     String promoteSql = "UPDATE visits SET status = 'DOCTOR' WHERE id = ? AND status = 'REGISTRATION' AND assigned_doctor_id IS NOT NULL";
                     try (PreparedStatement promoStmt = conn.prepareStatement(promoteSql)) {
                         promoStmt.setInt(1, visitId);
@@ -243,11 +264,13 @@ public class VisitDAO {
                     return true;
                 }
                 case "lab": {
-                    String sql = "UPDATE visits SET lab_paid = 1, status = 'PHARMACY' WHERE id = ? AND status = 'LAB_PAYMENT'";
+                    // Paying the lab fee sends the patient BACK to the doctor (not pharmacy),
+                    // so the doctor can review the lab results and prescribe medicine.
+                    String sql = "UPDATE visits SET lab_paid = 1, status = 'DOCTOR' WHERE id = ? AND status = 'LAB_PAYMENT'";
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                         stmt.setInt(1, visitId);
                         boolean ok = stmt.executeUpdate() > 0;
-                        if (ok) stageLogDAO.logTransition(visitId, "LAB_PAYMENT", "PHARMACY");
+                        if (ok) stageLogDAO.logTransition(visitId, "LAB_PAYMENT", "DOCTOR");
                         return ok;
                     }
                 }

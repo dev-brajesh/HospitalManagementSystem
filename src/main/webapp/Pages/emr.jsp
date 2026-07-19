@@ -53,12 +53,17 @@
 
     Doctor assignedDoctor = null;
     List<Doctor> doctorList = null;
+    List<Prescription> prescriptions = null;
     try {
         if (visit.getAssignedDoctorId() != null) {
             assignedDoctor = new DoctorDAO().findById(visit.getAssignedDoctorId());
         }
         if (canActReception) {
             doctorList = new DoctorDAO().findAll();
+        }
+        // Prescriptions may exist once the doctor has prescribed, even before pharmacy dispenses.
+        if (visit.getDiagnosis() != null) {
+            prescriptions = new PrescriptionDAO().findByVisitId(visit.getId());
         }
     } catch (Exception e) {
         // leave null, page still renders
@@ -143,11 +148,26 @@
                 </div>
                 <div>
                     <label class="block text-slate-700 font-semibold mb-2">Department</label>
-                    <input type="text" name="department" required class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
+                    <select name="department" required class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
+                        <option value="" disabled selected>Select department</option>
+                        <option value="General Medicine">General Medicine</option>
+                        <option value="Cardiology">Cardiology</option>
+                        <option value="Orthopedics">Orthopedics</option>
+                        <option value="Pediatrics">Pediatrics</option>
+                        <option value="Gynecology">Gynecology</option>
+                        <option value="ENT">ENT</option>
+                        <option value="Dermatology">Dermatology</option>
+                        <option value="Neurology">Neurology</option>
+                        <option value="Ophthalmology">Ophthalmology</option>
+                        <option value="Psychiatry">Psychiatry</option>
+                        <option value="Emergency">Emergency</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-slate-700 font-semibold mb-2">Consultation Fee (Rs.)</label>
-                    <input type="number" step="0.01" min="0" name="consultationFee" required class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
+                    <input type="text" value="500.00" readonly
+                           class="w-full border-2 border-slate-200 bg-slate-100 rounded-xl px-4 py-3 outline-none text-slate-500">
+                    <input type="hidden" name="consultationFee" value="500.00">
                 </div>
                 <div class="col-span-2 flex justify-end">
                     <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl">
@@ -190,30 +210,79 @@
                 <% if (!isDoctor) { %><span class="<%= lockBadge %>">🔒 Doctor Only</span><% } %>
             </div>
 
-            <% if (canActDoctor) { %>
-            <form action="${pageContext.request.contextPath}/doctorConsult" method="post" class="p-5 grid grid-cols-2 gap-4">
+            <% if (canActDoctor) {
+                boolean isPostLabConsult = visit.getDiagnosis() != null;
+            %>
+            <form action="${pageContext.request.contextPath}/doctorConsult" method="post" class="p-5 space-y-4">
                 <input type="hidden" name="visitId" value="<%= visit.getId() %>">
-                <div class="col-span-2">
+
+                <% if (!isPostLabConsult) { %>
+                <div>
                     <label class="block text-slate-700 font-semibold mb-2">Diagnosis / Notes</label>
                     <textarea name="diagnosis" rows="3" required class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none"></textarea>
                 </div>
                 <div>
-                    <label class="block text-slate-700 font-semibold mb-2">Lab Test Name (if referring)</label>
+                    <label class="block text-slate-700 font-semibold mb-2">Lab Test Name (leave blank if no lab referral is needed)</label>
                     <input type="text" name="labTestName" class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
                 </div>
-                <div>
-                    <label class="block text-slate-700 font-semibold mb-2">Lab Fee (Rs.)</label>
-                    <input type="number" step="0.01" min="0" name="labFee" class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
+                <% } else { %>
+                <div class="bg-slate-50 rounded-xl p-4 grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <p class="text-sm font-semibold text-slate-500">Diagnosis</p>
+                        <p class="text-slate-800 font-medium"><%= visit.getDiagnosis() %></p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-slate-500">Lab Test</p>
+                        <p class="text-slate-800 font-medium"><%= visit.getLabTestName() %> (Rs. <%= visit.getLabFee() != null ? visit.getLabFee() : "0.00" %>)</p>
+                    </div>
+                    <div class="col-span-2">
+                        <p class="text-sm font-semibold text-slate-500">Lab Result</p>
+                        <p class="text-slate-800 font-medium"><%= visit.getLabResultText() != null ? visit.getLabResultText() : "-" %></p>
+                    </div>
                 </div>
-                <div class="col-span-2 flex justify-end gap-3">
+                <% } %>
+
+                <div>
+                    <p class="font-semibold text-slate-700 mb-2">
+                        Prescribe Medicine
+                        <% if (!isPostLabConsult) { %><span class="text-xs font-normal text-slate-400">(skip this if referring to lab instead)</span><% } %>
+                    </p>
+                    <table class="w-full text-sm border border-emerald-200 rounded-xl overflow-hidden">
+                        <thead class="bg-emerald-100 text-emerald-900">
+                        <tr>
+                            <th class="p-2 text-left">Medicine</th>
+                            <th class="p-2 text-left">Dose</th>
+                            <th class="p-2 text-center">Morning</th>
+                            <th class="p-2 text-center">Afternoon</th>
+                            <th class="p-2 text-center">Evening</th>
+                            <th class="p-2 text-left">Days</th>
+                            <th class="p-2"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="medicineBody">
+                        <tr id="noMedicineRow">
+                            <td colspan="7" class="p-5 text-center text-slate-400">No medicine added</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <button type="button" id="addMedicineBtn"
+                            class="mt-3 border-2 border-emerald-300 text-emerald-700 font-semibold px-4 py-2 rounded-xl hover:bg-emerald-50">
+                        + Add Medicine
+                    </button>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <% if (!isPostLabConsult) { %>
                     <button type="submit" name="action" value="lab" class="bg-cyan-500 hover:bg-cyan-600 text-white font-bold px-6 py-3 rounded-xl">
                         Send to Lab
                     </button>
+                    <% } %>
                     <button type="submit" name="action" value="pharmacy" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl">
-                        Send to Pharmacy
+                        Prescribe &amp; Send to Pharmacy
                     </button>
                 </div>
             </form>
+            <script src="../js/patientVisit.js"></script>
             <% } else if (visit.getDiagnosis() == null) { %>
             <p class="p-5 text-slate-400 text-sm">Not reached yet.</p>
             <% } else { %>
@@ -243,7 +312,11 @@
                 <input type="hidden" name="visitId" value="<%= visit.getId() %>">
                 <div>
                     <p class="text-sm font-semibold text-slate-500 mb-1">Test</p>
-                    <p class="text-slate-800 font-medium"><%= visit.getLabTestName() %> (Rs. <%= visit.getLabFee() %>)</p>
+                    <p class="text-slate-800 font-medium"><%= visit.getLabTestName() %></p>
+                </div>
+                <div>
+                    <label class="block text-slate-700 font-semibold mb-2">Lab Fee (Rs.)</label>
+                    <input type="number" step="0.01" min="0" name="labFee" required class="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 outline-none">
                 </div>
                 <div>
                     <label class="block text-slate-700 font-semibold mb-2">Result / Findings</label>
@@ -293,29 +366,35 @@
             <form action="${pageContext.request.contextPath}/pharmacyDispense" method="post" class="p-5 space-y-4">
                 <input type="hidden" name="visitId" value="<%= visit.getId() %>">
 
-                <table class="w-full text-sm border border-emerald-200 rounded-xl overflow-hidden">
-                    <thead class="bg-emerald-100 text-emerald-900">
-                    <tr>
-                        <th class="p-2 text-left">Medicine</th>
-                        <th class="p-2 text-left">Dose</th>
-                        <th class="p-2 text-center">Morning</th>
-                        <th class="p-2 text-center">Afternoon</th>
-                        <th class="p-2 text-center">Evening</th>
-                        <th class="p-2 text-left">Days</th>
-                        <th class="p-2"></th>
-                    </tr>
-                    </thead>
-                    <tbody id="medicineBody">
-                    <tr id="noMedicineRow">
-                        <td colspan="7" class="p-5 text-center text-slate-400">No medicine added</td>
-                    </tr>
-                    </tbody>
-                </table>
-
-                <button type="button" id="addMedicineBtn"
-                        class="border-2 border-emerald-300 text-emerald-700 font-semibold px-4 py-2 rounded-xl hover:bg-emerald-50">
-                    + Add Medicine
-                </button>
+                <div>
+                    <p class="font-semibold text-slate-700 mb-2">Prescribed by Doctor</p>
+                    <table class="w-full text-sm border border-emerald-200 rounded-xl overflow-hidden">
+                        <thead class="bg-emerald-100 text-emerald-900">
+                        <tr>
+                            <th class="p-2 text-left">Medicine</th>
+                            <th class="p-2 text-left">Dose</th>
+                            <th class="p-2 text-center">Morning</th>
+                            <th class="p-2 text-center">Afternoon</th>
+                            <th class="p-2 text-center">Evening</th>
+                            <th class="p-2 text-left">Days</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <% if (prescriptions == null || prescriptions.isEmpty()) { %>
+                        <tr><td colspan="6" class="p-5 text-center text-slate-400">No medicine prescribed</td></tr>
+                        <% } else { for (Prescription p : prescriptions) { %>
+                        <tr class="border-t border-emerald-100">
+                            <td class="p-2"><%= p.getMedicineName() %></td>
+                            <td class="p-2"><%= p.getDose() %></td>
+                            <td class="p-2 text-center"><%= p.isMorning() ? "✓" : "" %></td>
+                            <td class="p-2 text-center"><%= p.isAfternoon() ? "✓" : "" %></td>
+                            <td class="p-2 text-center"><%= p.isEvening() ? "✓" : "" %></td>
+                            <td class="p-2"><%= p.getDays() %></td>
+                        </tr>
+                        <% } } %>
+                        </tbody>
+                    </table>
+                </div>
 
                 <div>
                     <label class="block text-slate-700 font-semibold mb-2">Total Cost (Rs.)</label>
@@ -329,17 +408,10 @@
                     </button>
                 </div>
             </form>
-            <script src="../js/patientVisit.js"></script>
-            <% } else if (visit.getPharmacyTotalCost() == null) { %>
+            <% } else if (prescriptions == null || prescriptions.isEmpty()) { %>
             <p class="p-5 text-slate-400 text-sm">Not reached yet.</p>
-            <% } else {
-                List<Prescription> prescriptions = null;
-                try {
-                    prescriptions = new PrescriptionDAO().findByVisitId(visit.getId());
-                } catch (Exception e) { /* leave null, section still renders */ }
-            %>
+            <% } else { %>
             <div class="p-5 space-y-4">
-                <% if (prescriptions != null && !prescriptions.isEmpty()) { %>
                 <table class="w-full text-sm border border-emerald-200 rounded-xl overflow-hidden">
                     <thead class="bg-emerald-100 text-emerald-900">
                     <tr>
@@ -364,7 +436,7 @@
                     <% } %>
                     </tbody>
                 </table>
-                <% } %>
+                <% if (visit.getPharmacyTotalCost() != null) { %>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <p class="text-sm font-semibold text-slate-500">Total Cost</p>
@@ -379,6 +451,9 @@
                         <% } %>
                     </div>
                 </div>
+                <% } else { %>
+                <p class="text-slate-400 text-sm">Awaiting pharmacist to dispense.</p>
+                <% } %>
             </div>
             <% } %>
         </section>

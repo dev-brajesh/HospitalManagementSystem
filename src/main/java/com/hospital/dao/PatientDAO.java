@@ -16,6 +16,8 @@ public class PatientDAO {
     public boolean usernameOrEmailExists(String username, String email) throws SQLException {
         String sql = "SELECT patient_id FROM patients WHERE username = ? OR email = ? LIMIT 1";
 
+        System.out.println("[PatientDAO] Checking existence for username='" + username + "' email='" + email + "'");
+
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
@@ -23,7 +25,9 @@ public class PatientDAO {
             stmt.setString(2, email);
 
             try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
+                boolean exists = rs.next();
+                System.out.println("[PatientDAO] usernameOrEmailExists result: " + exists);
+                return exists;
             }
         }
     }
@@ -36,6 +40,9 @@ public class PatientDAO {
                 "(first_name, last_name, date_of_birth, gender, blood_group, phone_number, " +
                 "email, address, emergency_contact_number, username, password) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        System.out.println("[PatientDAO] insertPatient: username='" + patient.getUsername()
+                + "' email='" + patient.getEmail() + "'");
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -53,6 +60,7 @@ public class PatientDAO {
             stmt.setString(11, patient.getPassword());
 
             int rowsAffected = stmt.executeUpdate();
+            System.out.println("[PatientDAO] insertPatient rows affected: " + rowsAffected);
             return rowsAffected > 0;
         }
     }

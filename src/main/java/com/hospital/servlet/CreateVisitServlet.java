@@ -6,7 +6,6 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 
 import java.io.IOException;
-import java.sql.SQLException;
 
 @WebServlet("/createVisit")
 public class CreateVisitServlet extends HttpServlet {
@@ -30,6 +29,10 @@ public class CreateVisitServlet extends HttpServlet {
         String contactNumber = (String) session.getAttribute("phoneNumber");
         String symptoms = request.getParameter("symptoms");
 
+        System.out.println("[CreateVisitServlet] doPost called. patientIdObj=" + patientIdObj
+                + " patientName=" + patientName + " contactNumber=" + contactNumber
+                + " symptoms=" + symptoms);
+
         if (patientIdObj == null) {
             // Session invalid — redirect to login
             response.sendRedirect(contextPath + "/Pages/login.jsp");
@@ -38,19 +41,24 @@ public class CreateVisitServlet extends HttpServlet {
 
         int patientId = patientIdObj;
         int newVisitId = -1;
+        String errorDetail = null;
+
         try {
             newVisitId = visitDAO.createVisit(patientId, patientName, contactNumber, symptoms);
-            System.out.println("[CreateVisitServlet] createVisit returned id=" + newVisitId + " for patientId=" + patientId + " symptoms='" + symptoms + "'");
-        } catch (SQLException e) {
+            System.out.println("[CreateVisitServlet] createVisit returned id=" + newVisitId
+                    + " for patientId=" + patientId + " symptoms='" + symptoms + "'");
+        } catch (Exception e) {
+            // Catch EVERYTHING here (not just SQLException) so a bad DB connection,
+            // null pointer, or driver issue doesn't fail silently.
             e.printStackTrace();
+            errorDetail = e.getClass().getSimpleName() + ": " + e.getMessage();
         }
 
         if (newVisitId > 0) {
-            // Redirect the patient to the newly-created EMR so reception will see it in their queue.
             response.sendRedirect(contextPath + "/Pages/emr.jsp?visitId=" + newVisitId);
         } else {
-            // Fallback: go back to dashboard with an error (server logs contain the cause)
-            request.getSession().setAttribute("flashError", "Could not create visit — please try again.");
+            request.getSession().setAttribute("flashError",
+                    "Could not create visit — " + (errorDetail != null ? errorDetail : "please try again."));
             response.sendRedirect(contextPath + "/Pages/patient.jsp");
         }
     }
