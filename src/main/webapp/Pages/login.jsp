@@ -1,4 +1,28 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page import="java.util.HashSet" %>
+<%@ page import="java.util.Arrays" %>
+
+<%
+    // Which role button should be active on page load. Defaults to DOCTOR,
+    // but honors ?role=... so links like the post-registration redirect
+    // (login.jsp?role=patient&registered=true) land on the right tab.
+    HashSet<String> knownRoles = new HashSet<>(Arrays.asList(
+            "DOCTOR", "PATIENT", "LAB", "RECEPTIONIST", "PHARMACY"));
+
+    String selectedRole = request.getParameter("role");
+    if (selectedRole == null || selectedRole.trim().isEmpty()) {
+        selectedRole = "DOCTOR";
+    } else {
+        selectedRole = selectedRole.trim().toUpperCase();
+    }
+    if (!knownRoles.contains(selectedRole)) {
+        selectedRole = "DOCTOR";
+    }
+
+    String activeClasses = "role-btn flex-1 py-2 rounded-lg bg-emerald-500 text-white font-semibold transition";
+    String inactiveClasses = "role-btn flex-1 py-2 rounded-lg text-slate-600 transition";
+%>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -41,35 +65,35 @@
                     <button type="button"
                             id="doctorBtn"
                             data-role="DOCTOR"
-                            class="role-btn flex-1 py-2 rounded-lg bg-emerald-500 text-white font-semibold transition">
+                            class="<%= "DOCTOR".equals(selectedRole) ? activeClasses : inactiveClasses %>">
                         Doctor
                     </button>
 
                     <button type="button"
                             id="patientBtn"
                             data-role="PATIENT"
-                            class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
+                            class="<%= "PATIENT".equals(selectedRole) ? activeClasses : inactiveClasses %>">
                         Patient
                     </button>
 
                     <button type="button"
                             id="labBtn"
                             data-role="LAB"
-                            class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
+                            class="<%= "LAB".equals(selectedRole) ? activeClasses : inactiveClasses %>">
                         Lab
                     </button>
 
                     <button type="button"
                             id="receptionBtn"
                             data-role="RECEPTIONIST"
-                            class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
+                            class="<%= "RECEPTIONIST".equals(selectedRole) ? activeClasses : inactiveClasses %>">
                         Reception
                     </button>
 
                     <button type="button"
                             id="pharmacistBtn"
                             data-role="PHARMACY"
-                            class="role-btn flex-1 py-2 rounded-lg text-slate-600 transition">
+                            class="<%= "PHARMACY".equals(selectedRole) ? activeClasses : inactiveClasses %>">
                         Pharmacy
                     </button>
 
@@ -87,7 +111,7 @@
                       class="space-y-5">
 
                     <input type="hidden" name="action" value="login">
-                    <input type="hidden" name="role" id="role" value="DOCTOR">
+                    <input type="hidden" name="role" id="role" value="<%= selectedRole %>">
 
                     <!-- Username -->
                     <div>

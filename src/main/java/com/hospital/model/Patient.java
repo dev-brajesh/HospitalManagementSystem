@@ -2,6 +2,7 @@ package com.hospital.model;
 
 public class Patient {
 
+    private int patientId;
     private String firstName;
     private String lastName;
     private String dateOfBirth;
@@ -15,6 +16,14 @@ public class Patient {
     private String password;
 
     public Patient() {
+    }
+
+    public int getPatientId() {
+        return patientId;
+    }
+
+    public void setPatientId(int patientId) {
+        this.patientId = patientId;
     }
 
     public String getFirstName() {

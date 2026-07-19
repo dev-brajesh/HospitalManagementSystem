@@ -56,4 +56,38 @@ public class PatientDAO {
             return rowsAffected > 0;
         }
     }
+
+    /**
+     * Looks up a patient by username. Used for login. Returns null if not found.
+     */
+    public Patient findByUsername(String username) throws SQLException {
+        String sql = "SELECT * FROM patients WHERE username = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, username);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                Patient patient = new Patient();
+                patient.setPatientId(rs.getInt("patient_id"));
+                patient.setFirstName(rs.getString("first_name"));
+                patient.setLastName(rs.getString("last_name"));
+                patient.setDateOfBirth(rs.getString("date_of_birth"));
+                patient.setGender(rs.getString("gender"));
+                patient.setBloodGroup(rs.getString("blood_group"));
+                patient.setPhoneNumber(rs.getString("phone_number"));
+                patient.setEmail(rs.getString("email"));
+                patient.setAddress(rs.getString("address"));
+                patient.setEmergencyContactNumber(rs.getString("emergency_contact_number"));
+                patient.setUsername(rs.getString("username"));
+                patient.setPassword(rs.getString("password"));
+                return patient;
+            }
+        }
+    }
 }
